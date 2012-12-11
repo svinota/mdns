@@ -1,0 +1,3 @@
+include python-mdns.spec
+include README*
+include LICENSE
