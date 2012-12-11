@@ -5,9 +5,8 @@ from distutils.core import setup
 setup(name='mdns',
     version='@RELEASE@',
     description='mDNS library',
-    author='Paul Scott-Murphy',
-    maintainer='Peter V. Saveliev',
-    maintainer_email='peet@redhat.com',
+    author='Peter V. Saveliev',
+    author_email='peet@redhat.com',
     url='https://github.com/svinota/mdns',
     license="GPLv3+",
     packages=[
