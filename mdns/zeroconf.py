@@ -1331,6 +1331,9 @@ class ServiceInfo(object):
             elif record.type == _TYPE_TXT:
                 if record.name == self.name:
                     self.set_text(record.text)
+            elif record.type == _TYPE_PTR:
+                if record.name == self.name:
+                    self.server = record.alias
 
     def request(self, zeroconf, timeout):
         """Returns true if the service could be discovered on the
@@ -1356,6 +1359,11 @@ class ServiceInfo(object):
                     out.add_answer_at_time(
                             zeroconf.cache.get_by_details(self.name,
                                 _TYPE_SRV, _CLASS_IN), now)
+                    out.add_question(DNSQuestion(self.name,
+                        _TYPE_PTR, _CLASS_IN))
+                    out.add_answer_at_time(
+                            zeroconf.cache.get_by_details(self.name,
+                                _TYPE_PTR, _CLASS_IN), now)
                     out.add_question(
                             DNSQuestion(self.name, _TYPE_TXT, _CLASS_IN))
                     out.add_answer_at_time(
