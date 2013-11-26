@@ -39,9 +39,6 @@ import traceback
 from pickle import dumps, loads
 from base64 import b64encode, b64decode
 from threading import Thread
-from Crypto.Hash import MD5
-from Crypto.Util.number import getPrime
-from Crypto import Random
 
 # py3k
 
@@ -105,13 +102,6 @@ _CLASS_UNIQUE = 0x8000
 #    1034    DOMAIN NAMES - CONCEPTS AND FACILITIES
 #    1035    DOMAIN NAMES - IMPLEMENTATION AND SPECIFICATION
 #
-#    DNSSEC
-#
-#    http://www.dnssec.net/rfc
-#    4033    DNS Security Introduction and Requirements
-#    4034    Resource Records for the DNS Security Extensions
-#    4035    Protocol Modifications for the DNS Security Extensions
-#
 #    mDNS
 #
 #    http://files.multicastdns.org/draft-cheshire-dnsext-multicastdns.txt
@@ -149,8 +139,6 @@ _TYPE_MX = 15
 _TYPE_TXT = 16
 _TYPE_AAAA = 28
 _TYPE_SRV = 33
-_TYPE_RRSIG = 46
-_TYPE_DNSKEY = 48
 _TYPE_AXFR = 252    # query only, see rfc 1035, section 3.2.3
 _TYPE_ANY = 255
 
@@ -181,8 +169,6 @@ _TYPES = {_TYPE_A: "a",
         _TYPE_TXT: "txt",
         _TYPE_AAAA: "aaaa",
         _TYPE_SRV: "srv",
-        _TYPE_RRSIG: "rrsig",
-        _TYPE_DNSKEY: "dnskey",
         _TYPE_AXFR: "axfr",
         _TYPE_ANY: "any"}
 
@@ -246,11 +232,6 @@ def text_to_dict(text):
             result[key] = value
     return result
 
-
-def prime(size=140):
-    return getPrime(size, Random.get_random_bytes)
-
-
 # Exceptions
 
 class NonLocalNameException(Exception):
@@ -279,7 +260,6 @@ class DNSEntry(object):
     """A DNS entry"""
 
     def __init__(self, name, type, clazz):
-        self.key = string.lower(name)
         self.name = name
         self.type = type
         self.clazz = clazz & _CLASS_MASK
@@ -410,79 +390,6 @@ class DNSRecord(DNSEntry):
         arg = "%s/%s,%s" % (
                 self.ttl, self.get_remaining_ttl(current_time_millis()), other)
         return DNSEntry.to_string(self, "record", arg)
-
-
-class DNSSignature(DNSRecord):
-    """An abstract DNS signature record class"""
-
-    def __init__(self, name, type, clazz, ttl):
-        DNSRecord.__init__(self, name, type, clazz, ttl)
-        self.type_covered = _TYPE_ANY
-        # we use private algorithm type 253
-        # according to RFC 2535, Section 11
-        self.algorithm = 253
-        self.labels = 0
-        self.original_ttl = 0
-        self.expiration = 0
-        self.inception = 0
-        self.tag = 0
-        self.signer = "none"
-        self.signature = "none"
-
-    def write(self, out):
-        # write header
-        out.write_short(self.type_covered)
-        out.write_uchar(self.algorithm)
-        out.write_uchar(self.labels)
-        out.write_int(self.original_ttl)
-        out.write_int(self.expiration)
-        out.write_int(self.inception)
-        out.write_short(self.tag)
-        out.write_name(self.signer)
-        out.write_uchar(len(self.signature))
-        out.write_string(self.signature, len(self.signature))
-
-    def __eq__(self, other):
-        if isinstance(other, DNSSignature):
-            return self.type_covered == other.type_covered and \
-                    self.signer == other.signer and \
-                    self.signature == other.signature
-        return 0
-
-    def __repr__(self):
-        return "RRSIG: [%s] %s" % (_TYPES[self.type_covered], self.signer)
-
-
-class DNSSignatureI(DNSSignature):
-    """Create a DNSRecord from a signature"""
-
-    def __init__(self, name, type, clazz, ttl, header, signer, signature):
-        DNSSignature.__init__(self, name, type, clazz, ttl)
-        (self.type_covered,
-                self.algorithm,
-                self.labels,
-                self.original_ttl,
-                self.expiration,
-                self.inception,
-                self.tag) = struct.unpack("!HBBIIIH", header)
-        self.signer = signer
-        self.signature = signature
-
-
-class DNSSignatureS(DNSSignature):
-    """Create signature from a DNSRecord"""
-
-    def __init__(self, name, type, clazz, record, key, signer=None):
-        DNSSignature.__init__(self, name, type, clazz, record.ttl)
-        self.type_covered = record.type
-        self.original_ttl = record.ttl
-        if signer:
-            self.signer = signer
-        else:
-            self.signer = record.name
-        h = MD5.new(record.sp()).digest()
-        self.signature = b64encode(dumps(key.sign(h, prime())))
-
 
 class DNSAddress(DNSRecord):
     """A DNS address record"""
@@ -770,12 +677,6 @@ class DNSIncoming(object):
                         info[0], info[1], info[2],
                         self.read_character_string(),
                         self.read_character_string())
-            elif info[0] == _TYPE_RRSIG:
-                rec = DNSSignatureI(domain,
-                        info[0], info[1], info[2],
-                        self.read_string(18),
-                        self.read_name(),
-                        self.read_character_string())
             elif info[0] == _TYPE_AAAA:
                 rec = DNSAddress(domain,
                         info[0], info[1], info[2],
@@ -1028,17 +929,6 @@ class DNSCache(object):
         except:
             list = self.cache[entry.key] = []
         list.append(entry)
-
-    def sign(self, entry, signer=None):
-        """Adds and sign an entry"""
-        if (self.get(entry) is not None):
-            return
-        if (entry.rrsig is None) and (self.private is not None):
-            entry.rrsig = DNSSignatureS(entry.name,
-                    _TYPE_RRSIG, _CLASS_IN, entry, self.private, signer)
-        self.add(entry)
-        if (self.private is not None):
-            self.add(entry.rrsig)
 
     def remove(self, entry):
         """Removes an entry"""
@@ -1727,21 +1617,6 @@ class Zeroconf(object):
         now = current_time_millis()
         next_time = now
 
-        self.cache.sign(
-                DNSPointer(info.type,
-                    _TYPE_PTR, _CLASS_IN, info.ttl, info.name), info.signer)
-        self.cache.sign(
-                DNSService(info.name,
-                    _TYPE_SRV, _CLASS_IN, info.ttl, info.priority,
-                    info.weight, info.port, info.server), info.signer)
-        self.cache.sign(
-                DNSText(info.name,
-                    _TYPE_TXT, _CLASS_IN, info.ttl, info.text), info.signer)
-        for i in info.address:
-            self.cache.sign(
-                    DNSAddress(info.server,
-                        _TYPE_A, _CLASS_IN, info.ttl, i), info.signer)
-
         while iterations > 0:
             if now < next_time:
                 self.wait(next_time - now)
@@ -1900,81 +1775,41 @@ class Zeroconf(object):
             listener.update_record(self, now, rec)
         self.notify_all()
 
-    def verify(self, entry, signature):
-        s = loads(b64decode(signature.signature))
-        key = None
-
-        if not self.psk:
-            if signature.signer in list(self.keys.keys()):
-                key = signature.signer
-            elif isinstance(entry, DNSPointer):
-                if entry.alias in list(self.keys.keys()):
-                    key = entry.alias
-            if not key:
-                return False
-
-        h = MD5.new(entry.sp()).digest()
-        if self.psk:
-            return self.private.verify(h, s)
-        else:
-            return self.keys[key].verify(h, s)
-
     def handle_response(self, msg, address):
         """Deal with incoming response packets.  All answers
         are held in the cache, and listeners are notified."""
         now = current_time_millis()
 
-        sigs = []
         precache = []
 
         for record in msg.answers:
-            if isinstance(record, DNSSignature):
-                sigs.append(record)
-            else:
-                precache.append(record)
+            precache.append(record)
 
             for e in precache:
-                for s in sigs:
-                    if self.verify(e, s):
-                        # print "DNS: %s verified with %s" % (e,s)
+                if self.adaptive and e.type == _TYPE_A:
+                    if e.address == '\x00\x00\x00\x00':
+                        e.address = socket.inet_aton(address)
 
-                        if self.adaptive and e.type == _TYPE_A:
-                            if e.address == '\x00\x00\x00\x00':
-                                e.address = socket.inet_aton(address)
-
-                        if e in self.cache.entries():
-                            if e.is_expired(now):
-                                for i in self.hooks:
-                                    try:
-                                        i.remove(e)
-                                    except:
-                                        pass
-                                self.cache.remove(e)
-                                self.cache.remove(s)
-                            else:
-                                entry = self.cache.get(e)
-                                sig = self.cache.get(s)
-                                if (entry is not None) and (sig is not None):
-                                    for i in self.hooks:
-                                        try:
-                                            i.update(e)
-                                        except:
-                                            pass
-                                    entry.reset_ttl(e)
-                                    sig.reset_ttl(s)
-                        else:
-                            e.rrsig = s
-                            self.cache.add(e)
-                            self.cache.add(s)
+                if e in self.cache.entries():
+                    if e.is_expired(now):
+                        for i in self.hooks:
+                            try:
+                                i.remove(e)
+                            except:
+                                pass
+                        self.cache.remove(e)
+                    else:
+                        entry = self.cache.get(e)
+                        if entry is not None:
                             for i in self.hooks:
                                 try:
                                     i.add(e)
                                 except:
                                     pass
+                            entry.reset_ttl(e)
 
-                        precache.remove(e)
-                        sigs.remove(s)
-                        self.update_record(now, record)
+                precache.remove(e)
+                self.update_record(now, record)
 
         if self.bypass:
             for e in precache:
