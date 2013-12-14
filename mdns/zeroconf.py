@@ -1336,15 +1336,9 @@ class ServiceInfo(object):
             self.records = records
         self.ttl = ttl
         self.announced = 0
-        if server:
-            self.server = server
-        else:
-            self.server = self.name
-        if properties is None:
-            self.properties = {}
-        else:
-            self.properties = {}
-        self.set_properties(properties)
+        self.server = server or self.name
+        self.properties = properties or {}
+        self.set_properties(self.properties)
 
     def time_to_go(self, now):
         d = (now - self.announced) // 1000
