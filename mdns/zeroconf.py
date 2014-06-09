@@ -28,7 +28,6 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-import string
 import time
 import struct
 import socket
@@ -39,15 +38,34 @@ import traceback
 from pickle import dumps, loads
 from base64 import b64encode, b64decode
 from threading import Thread
-from Crypto.Hash import MD5
-from Crypto.Util.number import getPrime
-from Crypto import Random
+
 
 # py3k
+import platform
+if platform.python_version_tuple()[0] == '3':
+    ord = lambda x: x
+
+class NI(object):
+    def __call__(self, *argv, **kwarg):
+        raise NotImplementedError()
+
+    def __getattribute__(self, *argv, **kwarg):
+        raise NotImplementedError()
+
+try:
+    from Crypto.Hash import MD5
+    from Crypto.Util.number import getPrime
+    from Crypto import Random
+    _HAVE_CRYPTO = True
+except ImportError:
+    MD5 = NI()
+    getPrime = NI()
+    Random = NI()
+    _HAVE_CRYPTO = False
 
 try:
     from functools import reduce
-except:
+except ImportError:
     pass
 
 __all__ = ["Zeroconf", "ServiceInfo", "ServiceBrowser"]
@@ -279,7 +297,7 @@ class DNSEntry(object):
     """A DNS entry"""
 
     def __init__(self, name, type, clazz):
-        self.key = string.lower(name)
+        self.key = str(name).lower()
         self.name = name
         self.type = type
         self.clazz = clazz & _CLASS_MASK
