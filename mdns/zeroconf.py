@@ -618,7 +618,7 @@ class DNSText(DNSRecord):
     def __repr__(self):
         """String representation"""
         if len(self.text) > 30:
-            return self.to_string(repr(self.text[:27] + "..."))
+            return self.to_string(repr(self.text[:27] + b"..."))
         else:
             return self.to_string(repr(self.text))
 
