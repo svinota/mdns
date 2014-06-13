@@ -297,7 +297,7 @@ class DNSEntry(object):
     """A DNS entry"""
 
     def __init__(self, name, type, clazz):
-        self.key = str(name).lower()
+        self.key = name.lower()
         self.name = name
         self.type = type
         self.clazz = clazz & _CLASS_MASK
@@ -599,7 +599,7 @@ class DNSText(DNSRecord):
 
     def __init__(self, name, type, clazz, ttl, text):
         DNSRecord.__init__(self, name, type, clazz, ttl)
-        self.text = text
+        self.text = str(text)
         try:
             self.properties = text_to_dict(text)
         except:
@@ -822,7 +822,10 @@ class DNSIncoming(object):
 
     def read_utf(self, offset, len):
         """Reads a UTF-8 string of a given length from the packet"""
-        result = self.data[offset:offset + len].decode('utf-8')
+        try:
+            result = self.data[offset:offset + len].decode('utf-8')
+        except UnicodeDecodeError:
+            result = str('')
         return result
 
     def read_name(self):
