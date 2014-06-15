@@ -228,6 +228,8 @@ def dict_to_text(d):
                 suffix = 'false'
         else:
             suffix = ''.encode('utf-8')
+        if isinstance(key, bytes):
+            key = key.decode('utf-8')
         list.append('='.join((key, suffix)))
     for item in list:
         result = ''.join((result, struct.pack('!c', chr(len(item))), item))
