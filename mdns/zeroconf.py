@@ -213,7 +213,7 @@ def current_time_millis():
 
 
 def dict_to_text(d):
-    list = []
+    list_ = []
     result = ''
     for key in d.keys():
         value = d[key]
@@ -230,8 +230,10 @@ def dict_to_text(d):
             suffix = ''.encode('utf-8')
         if isinstance(key, bytes):
             key = key.decode('utf-8')
-        list.append('='.join((key, suffix)))
-    for item in list:
+        if isinstance(suffix, bytes):
+            suffix = suffix.decode('utf-8')
+        list_.append('='.join((key, suffix)))
+    for item in list_:
         result = ''.join((result, struct.pack('!c', chr(len(item))), item))
     return result
 
