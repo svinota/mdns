@@ -27,7 +27,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
+import sys
 import time
 import struct
 import socket
@@ -214,7 +214,7 @@ def current_time_millis():
 
 def dict_to_text(d):
     list_ = []
-    result = ''
+    result = b''
     for key in d.keys():
         value = d[key]
         if value is None:
@@ -233,8 +233,14 @@ def dict_to_text(d):
         if isinstance(suffix, bytes):
             suffix = suffix.decode('utf-8')
         list_.append('='.join((key, suffix)))
+
     for item in list_:
-        result = ''.join((result, struct.pack('!c', chr(len(item))), item))
+        if sys.version_info[0] == 2:
+            value = chr(len(item))
+        else:
+            value = bytes(chr(len(item)), 'ascii')
+            item = bytes(item, 'utf-8')
+        result = b''.join((result, struct.pack('!c', value), item))
     return result
 
 
