@@ -700,7 +700,10 @@ class DNSIncoming(object):
 
         self.read_header()
         self.read_questions()
-        self.read_others()
+        try:
+            self.read_others()
+        except Exception as e:
+            pass
 
     def read_header(self):
         """Reads header portion of packet"""
