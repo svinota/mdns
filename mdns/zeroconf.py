@@ -41,9 +41,10 @@ from threading import Thread
 
 
 # py3k
-import platform
-if platform.python_version_tuple()[0] == '3':
+if sys.version_info[0] == 3:
     ord = lambda x: x
+    _chr = chr
+    chr = lambda x: bytes(_chr(x), 'utf-8')
 
 class NI(object):
     def __call__(self, *argv, **kwarg):
@@ -235,10 +236,8 @@ def dict_to_text(d):
         list_.append('='.join((key, suffix)))
 
     for item in list_:
-        if sys.version_info[0] == 2:
-            value = chr(len(item))
-        else:
-            value = bytes(chr(len(item)), 'ascii')
+        value = chr(len(item))
+        if sys.version_info[0] == 3:
             item = bytes(item, 'utf-8')
         result = b''.join((result, struct.pack('!c', value), item))
     return result
@@ -609,7 +608,10 @@ class DNSText(DNSRecord):
 
     def __init__(self, name, type, clazz, ttl, text):
         DNSRecord.__init__(self, name, type, clazz, ttl)
-        self.text = str(text)
+        if sys.version_info[0] == 3:
+            self.text = text
+        else:
+            self.text = str(text)
         try:
             self.properties = text_to_dict(text)
         except:
@@ -917,8 +919,8 @@ class DNSOutgoing(object):
 
     def write_byte(self, value):
         """Writes a single byte to the packet"""
-        format = '!c'
-        self.data.append(struct.pack(format, chr(value)))
+        format = '!B'
+        self.data.append(struct.pack(format, value))
         self.size += 1
 
     def write_uchar(self, value):
@@ -1012,7 +1014,7 @@ class DNSOutgoing(object):
         record.write(self)
         self.size -= 2
 
-        length = len(''.join(self.data[index:]))
+        length = len(b''.join(self.data[index:]))
         self.insert_short(index, length)  # Here is the short we adjusted for
 
     def packet(self):
@@ -1040,7 +1042,7 @@ class DNSOutgoing(object):
                 self.insert_short(0, 0)
             else:
                 self.insert_short(0, self.id)
-        return ''.join(self.data)
+        return b''.join(self.data)
 
 
 class DNSCache(object):
