@@ -2132,6 +2132,7 @@ class Zeroconf(object):
             try:
                 return i.sendto(out.packet(), 0, (addr, port))
             except:
+                traceback.print_exc()
                 # Ignore this, it may be a temporary loss of network connection
                 return -1
 
